@@ -12,7 +12,6 @@ import "./leafletWorkaround.ts";
 import luck from "./luck.ts";
 
 // Location of our classroom (as identified on Google Maps)
-//const app = document.querySelector<HTMLDivElement>("#app")!;
 const statusPanel = document.querySelector<HTMLDivElement>("#statusPanel")!;
 const Origin = leaflet.latLng(36.98949379578401, -122.06277128548504); //starting pos refering to our class
 const TILE_DEGREES = 1e-4;
@@ -54,7 +53,6 @@ function spawnCache(i: number, j: number, c: number) {
   // Handle interactions with the cache
   rect.bindPopup(() => {
     const cacheID = c;
-    //cachv[cacheID] = pointValue;
 
     // The popup offers a description and button
     const popupDiv = document.createElement("div");
@@ -105,7 +103,6 @@ for (let i = -NeighborSize; i < NeighborSize; i++) {
       caches++;
       cachv.push(pointValue);
       spawnCache(i, j, caches);
-      //console.log(cachv);
     }
   }
 }

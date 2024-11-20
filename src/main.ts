@@ -1,5 +1,6 @@
 //Code inspired by https://github.com/Jsanc189/cmpm-121-demo-3/blob/1722b71368f2aba6a71b87e1bd7e981119ecb25d/src/main.ts
 //State saving code inspired by: https://github.com/NickCorfmat/cmpm-121-demo-3/blob/main/src/main.ts
+//Token updating code inspired by: https://github.com/tnguy510/cmpm-121-demo-3
 //@deno-types="npm:@types/leaflet@^1.9.14"
 import leaflet from "leaflet";
 
@@ -86,19 +87,11 @@ playerMarker.bindTooltip("Your location!");
 playerMarker.addTo(map);
 path.addTo(map);
 //---------------------------------------------------MAIN FUNCTION CREATING A CACHE-------------------------------------------------------
-function SpawnCache(Cell: Cell) {
+function SpawnCache(Cell: Cell, cache: Geocache) {
   const bounds = board.getCellBounds(Cell);
   const box = leaflet.rectangle(bounds);
   box.addTo(map);
-  const cached = Geocaches.find((cache) =>
-    cache.i === Cell.i && cache.j === Cell.j
-  );
-  //console.log("cash found?: ", cached);
-  if (!cached) {
-    console.error("Cache not found for cell:", Cell);
-    return;
-  }
-  let tokens = cached.tokens;
+  let tokens = cache.tokens;
   box.bindPopup(() => {
     const serialtokens: Array<Coin> = [];
     for (let i = 0; i <= tokens; i++) {
@@ -115,36 +108,36 @@ function SpawnCache(Cell: Cell) {
       .addEventListener("click", () => {
         if (tokens > 0) {
           tokens--;
-          cached.tokens = tokens;
           playerTokens.push(serialtokens.pop()!);
           let serial = "";
           for (let i = 0; i < playerTokens.length; i++) {
             serial += coinID(playerTokens[i]);
             serial += " ";
           }
-          saveGameState();
           popUpDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
             `${tokens}`;
           statusPanel.innerHTML = `Coins Held: ${serial}`;
         } else alert("This Cache has no tokens");
+        updateCellCache(Cell, tokens);
       });
     popUpDiv
       .querySelector<HTMLButtonElement>("#deposit")!
       .addEventListener("click", () => {
         if (playerTokens.length > 0) {
           tokens++;
-          cached.tokens = tokens;
+          //cached.tokens = tokens;
           serialtokens.push(playerTokens.pop()!);
           let serial = "";
           for (let i = 0; i < playerTokens.length; i++) {
             serial += coinID(playerTokens[i]);
             serial += " ";
           }
-          saveGameState();
+          //saveGameState();
           popUpDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
             `${tokens}`;
           statusPanel.innerHTML = `Coins Held: ${serial}`;
         } else alert("You have no tokens to deposit");
+        updateCellCache(Cell, tokens);
       });
     return popUpDiv;
   });
@@ -167,8 +160,8 @@ function CacheCells() {
       newCache.j = cell.j;
       newCache.tokens = Math.floor(luck([cell.i, cell.j].toString()) * 100);
       Geocaches.push(newCache);
-      SpawnCache(cell);
-      //console.log("Pushed to Cache, len: ", Geocaches.length);
+      SpawnCache(cell, newCache);
+      saveGameState();
     } else {
       const mem = Mementos.find((momento) => {
         const [i, j] = momento.split(",").map(Number);
@@ -180,9 +173,8 @@ function CacheCells() {
         existingCache.i = i;
         existingCache.j = j;
         existingCache.tokens = tokens;
-        Geocaches.push(existingCache);
-        SpawnCache(cell);
-        //console.log("Pushed to Cache, len: ", Geocaches.length);
+        SpawnCache(cell, existingCache);
+        saveGameState();
       }
     }
   });
@@ -198,16 +190,37 @@ function restartMap(origin: leaflet.LatLng) {
   CacheCells();
   statusPanel.innerHTML = ``;
 }
-function removeCaches() {
+function updateCellCache(cell: Cell, cacheCoins: number) {
+  let index = -1;
+  updateMementoArray();
+
+  const memFound = Mementos.find((memento) => {
+    const [i, j] = memento.split(",").map(Number);
+    index++;
+    return i === cell.i && j === cell.j;
+  });
+  if (memFound) {
+    Geocaches[index].tokens = cacheCoins;
+
+    const newMemento = Geocaches[index].toMemento();
+    Mementos[index] = newMemento;
+  }
+  saveGameState();
+  saveGameState();
+}
+function updateMementoArray() {
+  Mementos = [];
   Geocaches.forEach((cache) => {
     Mementos.push(cache.toMemento());
   });
+}
+function removeCaches() {
+  updateMementoArray();
   map.eachLayer((layer) => {
     if (layer instanceof leaflet.Rectangle) {
       map.removeLayer(layer);
     }
   });
-  Geocaches.length = 0;
 }
 function coinID(coin: Coin) {
   return `${coin.cell.j}: ${coin.cell.i}#${coin.serial}`;
@@ -230,7 +243,6 @@ function saveGameState() {
     Mementos,
     Geocaches,
   };
-  //console.log("Saving states: Player LOC = "+ currentLocation + " Player's tokens: "+ playerTokens + " Players movement history: "+ playerhistory+" Mementos: "+Mementos+" GeoCaches: "+Geocaches);
   localStorage.setItem(KEY, JSON.stringify(gameState));
 }
 function loadGameState(): void {
@@ -244,7 +256,6 @@ function loadGameState(): void {
     playerhistory = state.playerhistory;
     Mementos = state.Mementos;
     playerTokens = state.playerTokens;
-    //console.log("Loading states: Player LOC = "+ currentLocation + " Player's tokens: "+ playerTokens + " Players movement history: "+ playerhistory+" Mementos: "+Mementos+" GeoCaches: "+Geocaches);
     if (!currentLocation) { //Should never happen
       console.log("undefiend");
       currentLocation = Origin;

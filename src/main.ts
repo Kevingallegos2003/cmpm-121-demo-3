@@ -1,4 +1,5 @@
 //Code inspired by https://github.com/Jsanc189/cmpm-121-demo-3/blob/1722b71368f2aba6a71b87e1bd7e981119ecb25d/src/main.ts
+//State saving code inspired by: https://github.com/NickCorfmat/cmpm-121-demo-3/blob/main/src/main.ts
 //@deno-types="npm:@types/leaflet@^1.9.14"
 import leaflet from "leaflet";
 
@@ -21,10 +22,18 @@ const TILE_DEGREES = 1e-4;
 const NeighborSize = 8;
 const SpawnChance = 0.1;
 const gamezoom = 18;
-const playerMarker = leaflet.marker(Origin);
-const playerTokens: Array<Coin> = [];
-const Geocaches: Geocache[] = [];
-const Mementos: string[] = [];
+let currentLocation = leaflet.latLng(36.98949379578401, -122.06277128548504);
+const playerMarker = leaflet.marker(currentLocation);
+let playerTokens: Array<Coin> = [];
+let Geocaches: Geocache[] = [];
+let Mementos: string[] = [];
+let playerhistory: leaflet.LatLng[] = [];
+const KEY = "LOCAL";
+const path: leaflet.Polyline = leaflet.polyline([], {
+  color: "red",
+  weight: 5,
+  opacity: 0.3,
+});
 interface Cell {
   readonly i: number;
   readonly j: number;
@@ -32,9 +41,6 @@ interface Cell {
 interface Coin {
   readonly cell: Cell;
   readonly serial: number;
-}
-interface Cache {
-  readonly coins: Coin[];
 }
 interface Memento<T> {
   toMemento(): T;
@@ -78,6 +84,7 @@ leaflet
   .addTo(map);
 playerMarker.bindTooltip("Your location!");
 playerMarker.addTo(map);
+path.addTo(map);
 //---------------------------------------------------MAIN FUNCTION CREATING A CACHE-------------------------------------------------------
 function SpawnCache(Cell: Cell) {
   const bounds = board.getCellBounds(Cell);
@@ -86,7 +93,7 @@ function SpawnCache(Cell: Cell) {
   const cached = Geocaches.find((cache) =>
     cache.i === Cell.i && cache.j === Cell.j
   );
-  console.log("cash found?: ", cached);
+  //console.log("cash found?: ", cached);
   if (!cached) {
     console.error("Cache not found for cell:", Cell);
     return;
@@ -115,6 +122,7 @@ function SpawnCache(Cell: Cell) {
             serial += coinID(playerTokens[i]);
             serial += " ";
           }
+          saveGameState();
           popUpDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
             `${tokens}`;
           statusPanel.innerHTML = `Coins Held: ${serial}`;
@@ -132,6 +140,7 @@ function SpawnCache(Cell: Cell) {
             serial += coinID(playerTokens[i]);
             serial += " ";
           }
+          saveGameState();
           popUpDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
             `${tokens}`;
           statusPanel.innerHTML = `Coins Held: ${serial}`;
@@ -143,17 +152,10 @@ function SpawnCache(Cell: Cell) {
 //--------------------------------------------------------------------------------------------------------------------------------------
 
 const board = new Board(TILE_DEGREES, NeighborSize);
-let cells = board.getCellsNearPoint(Origin);
-/*
-for (let i = 0; i < cells.length; i++) {
-  if (luck([cells[i].i, cells[i].j].toString()) < SpawnChance) {
-    SpawnCache(cells[i]);
-  }
-}
-*/
+let cells = board.getCellsNearPoint(Origin); //Origin
 //========Other Funcs=========================
 function CacheCells() {
-  cells = board.getCellsNearPoint(Origin);
+  cells = board.getCellsNearPoint(currentLocation); //Origin
   cells.forEach((cell) => {
     const Exists = Mementos.some((momento) => {
       const [i, j] = momento.split(",").map(Number);
@@ -166,7 +168,7 @@ function CacheCells() {
       newCache.tokens = Math.floor(luck([cell.i, cell.j].toString()) * 100);
       Geocaches.push(newCache);
       SpawnCache(cell);
-      console.log("Pushed to Cache, len: ", Geocaches.length);
+      //console.log("Pushed to Cache, len: ", Geocaches.length);
     } else {
       const mem = Mementos.find((momento) => {
         const [i, j] = momento.split(",").map(Number);
@@ -180,10 +182,21 @@ function CacheCells() {
         existingCache.tokens = tokens;
         Geocaches.push(existingCache);
         SpawnCache(cell);
-        console.log("Pushed to Cache, len: ", Geocaches.length);
+        //console.log("Pushed to Cache, len: ", Geocaches.length);
       }
     }
   });
+}
+function restartMap(origin: leaflet.LatLng) {
+  currentLocation = origin;
+  Movement(0, 0);
+  path.setLatLngs([]);
+  playerTokens = [];
+  playerhistory = [];
+  Geocaches = [];
+  Mementos = [];
+  CacheCells();
+  statusPanel.innerHTML = ``;
 }
 function removeCaches() {
   Geocaches.forEach((cache) => {
@@ -200,29 +213,109 @@ function coinID(coin: Coin) {
   return `${coin.cell.j}: ${coin.cell.i}#${coin.serial}`;
 }
 function Movement(i: number, j: number) {
-  Origin.lat += i;
-  Origin.lng += j;
-  playerMarker.setLatLng(Origin);
+  const newLocation: leaflet.LatLng = leaflet.latLng(0, 0);
+  newLocation.lat = currentLocation.lat + i;
+  newLocation.lng = currentLocation.lng + j;
+  playerMarker.setLatLng(newLocation);
+  playerhistory.push(newLocation);
+  path.setLatLngs(playerhistory);
+  currentLocation = newLocation;
+  saveGameState();
 }
+function saveGameState() {
+  const gameState = {
+    currentLocation,
+    playerTokens,
+    playerhistory,
+    Mementos,
+    Geocaches,
+  };
+  //console.log("Saving states: Player LOC = "+ currentLocation + " Player's tokens: "+ playerTokens + " Players movement history: "+ playerhistory+" Mementos: "+Mementos+" GeoCaches: "+Geocaches);
+  localStorage.setItem(KEY, JSON.stringify(gameState));
+}
+function loadGameState(): void {
+  const gameState = localStorage.getItem(KEY);
+  if (gameState) {
+    const state = JSON.parse(gameState);
+    if (!state) {
+      return;
+    }
+    currentLocation = state.currentLocation;
+    playerhistory = state.playerhistory;
+    Mementos = state.Mementos;
+    playerTokens = state.playerTokens;
+    //console.log("Loading states: Player LOC = "+ currentLocation + " Player's tokens: "+ playerTokens + " Players movement history: "+ playerhistory+" Mementos: "+Mementos+" GeoCaches: "+Geocaches);
+    if (!currentLocation) { //Should never happen
+      console.log("undefiend");
+      currentLocation = Origin;
+    }
+    playerMarker.setLatLng(currentLocation);
+    CacheCells();
+    path.setLatLngs(playerhistory);
+    let s = "";
+    for (let i = 0; i < playerTokens.length; i++) {
+      s += coinID(playerTokens[i]);
+      s += " ";
+    }
+    statusPanel.innerHTML = `Coins Held: ${s}`;
+    map.setView(currentLocation);
+  } else {
+    Movement(0, 0);
+    playerhistory.push(currentLocation);
+    removeCaches();
+    CacheCells();
+  }
+}
+
 //===============main==========================
-CacheCells();
+
+loadGameState();
 document.getElementById("north")?.addEventListener("click", () => {
   Movement(TILE_DEGREES, 0);
   removeCaches();
   CacheCells();
+  saveGameState();
 });
 document.getElementById("south")?.addEventListener("click", () => {
   Movement(-TILE_DEGREES, 0);
   removeCaches();
   CacheCells();
+  saveGameState();
 });
 document.getElementById("east")?.addEventListener("click", () => {
   Movement(0, TILE_DEGREES);
   removeCaches();
   CacheCells();
+  saveGameState();
 });
 document.getElementById("west")?.addEventListener("click", () => {
   Movement(0, -TILE_DEGREES);
   removeCaches();
   CacheCells();
+  saveGameState();
+});
+document.getElementById("reset")?.addEventListener("click", () => {
+  const input = prompt("Are you sure you wanna reset? Yes|No");
+  if (
+    input?.toLocaleLowerCase() === "yes" ||
+    input?.toLocaleLowerCase() === "y" || input?.toLocaleLowerCase() === "ok"
+  ) {
+    console.log("reset game");
+    alert("reseted cahces");
+    removeCaches();
+    localStorage.clear();
+    restartMap(Origin);
+    restartMap(Origin);
+    map.setView(Origin);
+  }
+});
+document.getElementById("sensor")?.addEventListener("click", () => {
+  navigator.geolocation.watchPosition((position) => {
+    const { latitude, longitude } = position.coords;
+    const newLocation = leaflet.latLng(latitude, longitude);
+    removeCaches();
+    restartMap(newLocation);
+    map.setView(newLocation);
+    saveGameState();
+  });
 });

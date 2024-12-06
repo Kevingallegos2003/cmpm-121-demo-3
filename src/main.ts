@@ -154,12 +154,21 @@ function CacheCells() {
       return i === cell.i && j === cell.j;
     });
     if (!Exists && luck([cell.i, cell.j].toString()) < SpawnChance) {
+      /*
       const newCache = new Geocache();
       newCache.i = cell.i;
       newCache.j = cell.j;
       newCache.tokens = Math.floor(luck([cell.i, cell.j].toString()) * 100);
+      */
+      const newCache = cacheInit(
+        cell.i,
+        cell.j,
+        Math.floor(luck([cell.i, cell.j].toString()) * 100),
+        cell,
+      );
+      //------------------------------------
       Geocaches.push(newCache);
-      SpawnCache(cell, newCache);
+      //SpawnCache(cell, newCache);
       saveGameState();
     } else {
       const mem = Mementos.find((momento) => {
@@ -168,15 +177,26 @@ function CacheCells() {
       });
       if (mem) {
         const [i, j, tokens] = mem.split(",").map(Number);
+        /*
         const existingCache = new Geocache();
         existingCache.i = i;
         existingCache.j = j;
         existingCache.tokens = tokens;
         SpawnCache(cell, existingCache);
+        */
+        cacheInit(i, j, tokens, cell);
         saveGameState();
       }
     }
   });
+}
+function cacheInit(column: number, row: number, numCoins: number, cell: Cell) {
+  const newCache = new Geocache();
+  newCache.i = column;
+  newCache.j = row;
+  newCache.tokens = numCoins;
+  SpawnCache(cell, newCache);
+  return newCache;
 }
 function restartMap(origin: leaflet.LatLng) {
   currentLocation = origin;

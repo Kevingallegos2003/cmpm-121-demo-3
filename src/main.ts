@@ -107,16 +107,7 @@ function SpawnCache(Cell: Cell, cache: Geocache) {
       .querySelector<HTMLButtonElement>("#withdraw")!
       .addEventListener("click", () => {
         if (tokens > 0) {
-          tokens--;
-          playerTokens.push(serialtokens.pop()!);
-          let serial = "";
-          for (let i = 0; i < playerTokens.length; i++) {
-            serial += coinID(playerTokens[i]);
-            serial += " ";
-          }
-          popUpDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
-            `${tokens}`;
-          statusPanel.innerHTML = `Coins Held: ${serial}`;
+          tokens = CacheGui(tokens, -1, serialtokens, playerTokens, popUpDiv);
         } else alert("This Cache has no tokens");
         updateCellCache(Cell, tokens);
       });
@@ -124,18 +115,7 @@ function SpawnCache(Cell: Cell, cache: Geocache) {
       .querySelector<HTMLButtonElement>("#deposit")!
       .addEventListener("click", () => {
         if (playerTokens.length > 0) {
-          tokens++;
-          //cached.tokens = tokens;
-          serialtokens.push(playerTokens.pop()!);
-          let serial = "";
-          for (let i = 0; i < playerTokens.length; i++) {
-            serial += coinID(playerTokens[i]);
-            serial += " ";
-          }
-          //saveGameState();
-          popUpDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
-            `${tokens}`;
-          statusPanel.innerHTML = `Coins Held: ${serial}`;
+          tokens = CacheGui(tokens, 1, playerTokens, serialtokens, popUpDiv);
         } else alert("You have no tokens to deposit");
         updateCellCache(Cell, tokens);
       });
@@ -146,6 +126,25 @@ function SpawnCache(Cell: Cell, cache: Geocache) {
 
 const board = new Board(TILE_DEGREES, NeighborSize);
 let cells = board.getCellsNearPoint(Origin); //Origin
+//-----------GUI for Cache Logic-------------------
+function CacheGui(
+  tokens: number,
+  t: number,
+  playArr: Coin[],
+  SerArr: Coin[],
+  Div: HTMLDivElement,
+) {
+  tokens += t;
+  SerArr.push(playArr.pop()!);
+  let serial = "";
+  for (let i = 0; i < playerTokens.length; i++) {
+    serial += coinID(playerTokens[i]);
+    serial += " ";
+  }
+  Div.querySelector<HTMLSpanElement>("#value")!.innerHTML = `${tokens}`;
+  statusPanel.innerHTML = `Coins Held: ${serial}`;
+  return tokens;
+}
 //========Other Funcs=========================
 function CacheCells() {
   cells = board.getCellsNearPoint(currentLocation); //Origin
